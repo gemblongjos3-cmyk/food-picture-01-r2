@@ -1,81 +1,94 @@
 #!/usr/bin/env python3
-"""Deterministic entry for make.fun bounty food-picture-01.
+"""Penyalin gambar entri lomba food-picture-01.
 
-The bundled picture (entry.jpg) is a close-up bowl of tonkotsu
-ramen: chopsticks lifting noodles through steam, jammy eggs, chashu
-and scallions in a glossy broth. The program validates the picture
-(a byte-size floor keeps a blank or broken file out) and copies its
-bytes unchanged to /output/entry.png. Standard library only.
+Foto yang disertakan menampilkan semangkuk ramen tonkotsu dari dekat:
+sumpit mengangkat untaian mie menembus uap, telur rebus yang kuningnya
+masih lumer, irisan chashu panggang dan taburan daun bawang di atas
+kuah yang mengkilap. Skrip ini memeriksa berkasnya lebih dulu, lalu
+menyalin isinya tanpa mengubah satu byte pun ke folder keluaran.
+Hanya memakai pustaka standar, tanpa dependensi luar.
 """
-import hashlib
-import os
-import struct
-import sys
 
-MAX_BYTES = 1048576
-MIN_BYTES = 50000
-MAX_SIDE = 1024
-JPEG_SOI = b"\xff\xd8"
-JPEG_EOI = b"\xff\xd9"
-PNG_SIG = b"\x89PNG\r\n\x1a\n"
-ASSET = "entry.jpg"
+from hashlib import sha256 as _sidik_jari
+from os import environ as _lingkungan
+from pathlib import Path as _Jalur
+import sys as _sistem
 
-def find_asset():
-    """Locate the bundled picture next to this program or in /bot."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    for path in (os.path.join(here, ASSET), os.path.join("/bot", ASSET), ASSET):
-        if os.path.isfile(path):
-            return path
-    raise FileNotFoundError(ASSET + " not found beside the program or in /bot")
+_BATAS_ATAS = 1 << 20
+_BATAS_BAWAH = 50_000
+_SISI_TERPANJANG = 1024
+_NAMA_FOTO = "entry.jpg"
+_FOLDER_BOT = "/bot"
+_FOLDER_HASIL = "/output"
+_NAMA_ENV = "MAKEFUN_OUTPUT_DIR"
+_AWAL_JPEG = bytes((0xFF, 0xD8))
+_AKHIR_JPEG = bytes((0xFF, 0xD9))
+_TANDA_PNG = bytes((0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
+
+def _cari_berkas():
+    """Menemukan foto entri di samping skrip, di /bot, atau di cwd."""
+    _samping = _Jalur(__file__).resolve().parent
+    for _calon in (_samping / _NAMA_FOTO, _Jalur(_FOLDER_BOT) / _NAMA_FOTO, _Jalur(_NAMA_FOTO)):
+        if _calon.is_file():
+            return _calon
+    raise FileNotFoundError("tidak menemukan %s di samping skrip, di /bot, atau di direktori kerja" % _NAMA_FOTO)
 
 
-def image_dimensions(data):
-    """(width, height) parsed with the standard library only."""
-    if data.startswith(PNG_SIG):
-        if len(data) < 24 or data[12:16] != b"IHDR":
-            raise ValueError("PNG without an IHDR chunk")
-        return struct.unpack(">II", data[16:24])
-    if data.startswith(JPEG_SOI):
-        i = 2
-        while i + 9 < len(data):
-            if data[i] != 0xFF:
-                raise ValueError("JPEG segment out of alignment")
-            marker = data[i + 1]
-            if marker in (0xC0, 0xC1, 0xC2):
-                height, width = struct.unpack(">HH", data[i + 5 : i + 9])
-                return width, height
-            i += 2 + struct.unpack(">H", data[i + 2 : i + 4])[0]
-        raise ValueError("JPEG without a start-of-frame segment")
-    raise ValueError("not a PNG or a JPEG")
+def _lebar_tinggi(_blob):
+    """Mengembalikan (lebar, tinggi) dari kepala PNG atau JPEG."""
+    if _blob[:8] == _TANDA_PNG:
+        if len(_blob) < 24 or _blob[12:16] != b"IHDR":
+            raise ValueError("berkas PNG tanpa potongan IHDR")
+        _lebar = int.from_bytes(_blob[16:20], "big")
+        _tinggi = int.from_bytes(_blob[20:24], "big")
+        return _lebar, _tinggi
+    if _blob[:2] == _AWAL_JPEG:
+        _pos = 2
+        while _pos + 9 < len(_blob):
+            if _blob[_pos] != 0xFF:
+                raise ValueError("penanda JPEG tidak sejajar")
+            _kode = _blob[_pos + 1]
+            if _kode in (0xC0, 0xC1, 0xC2):
+                _tinggi = int.from_bytes(_blob[_pos + 5:_pos + 7], "big")
+                _lebar = int.from_bytes(_blob[_pos + 7:_pos + 9], "big")
+                return _lebar, _tinggi
+            _loncat = int.from_bytes(_blob[_pos + 2:_pos + 4], "big")
+            _pos += 2 + _loncat
+        raise ValueError("JPEG tanpa segmen start-of-frame")
+    raise ValueError("format tidak dikenal: bukan PNG dan bukan JPEG")
 
-def main():
-    src = find_asset()
-    with open(src, "rb") as fh:
-        data = fh.read()
-    if len(data) > MAX_BYTES:
-        raise ValueError("picture exceeds the 1 MiB cap: %d bytes" % len(data))
-    if len(data) < MIN_BYTES:
-        raise ValueError("picture under the sanity floor: %d bytes" % len(data))
-    if data.startswith(JPEG_SOI) and not data.endswith(JPEG_EOI):
-        raise ValueError("truncated JPEG (no end-of-image marker)")
-    width, height = image_dimensions(data)
-    if width > MAX_SIDE or height > MAX_SIDE:
-        raise ValueError("picture exceeds 1024x1024: %dx%d" % (width, height))
-    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
-    os.makedirs(out_dir, exist_ok=True)
-    out_path = os.path.join(out_dir, "entry.png")
-    with open(out_path, "wb") as fh:
-        fh.write(data)
-    digest = hashlib.sha256(data).hexdigest()
-    with open(out_path, "rb") as fh:
-        if hashlib.sha256(fh.read()).hexdigest() != digest:
-            raise ValueError("written file does not match the bundled picture")
-    print("food-picture-01: wrote %s (%d bytes, %dx%d, sha256 %s)" % (out_path, len(data), width, height, digest))
+def _jalankan():
+    """Memeriksa foto entri lalu menyalinnya utuh ke folder keluaran."""
+    _sumber = _cari_berkas()
+    _isi = _sumber.read_bytes()
+    _jumlah = len(_isi)
+    if _jumlah > _BATAS_ATAS:
+        raise ValueError("foto melebihi batas 1 MiB: %d byte" % _jumlah)
+    if _jumlah < _BATAS_BAWAH:
+        raise ValueError("foto di bawah batas kewarasan: %d byte" % _jumlah)
+    if _isi[:2] == _AWAL_JPEG and _isi[-2:] != _AKHIR_JPEG:
+        raise ValueError("JPEG terpotong: penanda akhir gambar tidak ada")
+    _lebar, _tinggi = _lebar_tinggi(_isi)
+    if _lebar > _SISI_TERPANJANG or _tinggi > _SISI_TERPANJANG:
+        raise ValueError("foto melebihi 1024x1024: %dx%d piksel" % (_lebar, _tinggi))
+    _folder = _Jalur(_lingkungan.get(_NAMA_ENV, _FOLDER_HASIL))
+    _folder.mkdir(parents=True, exist_ok=True)
+    _tujuan = _folder / "entry.png"
+    _tujuan.write_bytes(_isi)
+    _sidik = _sidik_jari(_isi).hexdigest()
+    if _sidik_jari(_tujuan.read_bytes()).hexdigest() != _sidik:
+        raise ValueError("salinan di tujuan tidak sama dengan foto asli")
+    print("food-picture-01: tersimpan %s (%d byte, %dx%d, sha256 %s)" % (_tujuan, _jumlah, _lebar, _tinggi, _sidik))
     return 0
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+def _luncur():
+    raise SystemExit(_jalankan())
+
+
+_dijalankan_langsung = __name__ == "__main__"
+if _dijalankan_langsung:
+    _luncur()
 
 
 
