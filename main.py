@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Deterministic entry for make.fun bounty food-picture-01.
 
-The bundled picture (entry.jpg) shows a bowl of tonkotsu ramen up
-close: chopsticks lifting noodles through steam, jammy eggs, chashu
-and scallions in a glossy broth. This program validates the picture
-(a byte-size floor keeps a blank or broken file out) and writes its
+The bundled picture (entry.jpg) is a close-up bowl of tonkotsu
+ramen: chopsticks lifting noodles through steam, jammy eggs, chashu
+and scallions in a glossy broth. The program validates the picture
+(a byte-size floor keeps a blank or broken file out) and copies its
 bytes unchanged to /output/entry.png. Standard library only.
 """
 import hashlib
@@ -19,7 +19,6 @@ JPEG_SOI = b"\xff\xd8"
 JPEG_EOI = b"\xff\xd9"
 PNG_SIG = b"\x89PNG\r\n\x1a\n"
 ASSET = "entry.jpg"
-
 
 def find_asset():
     """Locate the bundled picture next to this program or in /bot."""
@@ -49,7 +48,6 @@ def image_dimensions(data):
         raise ValueError("JPEG without a start-of-frame segment")
     raise ValueError("not a PNG or a JPEG")
 
-
 def main():
     src = find_asset()
     with open(src, "rb") as fh:
@@ -78,4 +76,6 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
 
