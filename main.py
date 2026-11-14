@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Deterministic entry for make.fun bounty food-picture-01.
 
-The picture (entry.jpg, bundled in this repository) is a bowl of tonkotsu
-ramen photographed up close: noodles lifted by chopsticks through the
-steam, jammy eggs, chashu and scallions in a glossy broth. This program
-validates the picture (including a floor on its byte size, so a blank or
-broken file can never be entered) and writes its bytes, unchanged, to
-/output/entry.png. Standard library only; deterministic.
+The bundled picture (entry.jpg) shows a bowl of tonkotsu ramen up
+close: chopsticks lifting noodles through steam, jammy eggs, chashu
+and scallions in a glossy broth. This program validates the picture
+(a byte-size floor keeps a blank or broken file out) and writes its
+bytes unchanged to /output/entry.png. Standard library only.
 """
 import hashlib
 import os
